@@ -3,39 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Temp Mail Client</title>
+  <title>Temp Mail</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background: #0b0f19; color: #f1f5f9; padding: 14px; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 460px; }
+    .container { width: 100%; max-width: 480px; }
     header { text-align: center; margin-bottom: 16px; }
     header h1 { font-size: 1.3rem; color: #38bdf8; }
     header p { font-size: 0.8rem; color: #94a3b8; }
-    
+
     .card { background: #1e293b; padding: 14px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 12px; }
     .label { font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; font-weight: bold; margin-bottom: 6px; }
-    
+
     .email-box { display: flex; gap: 8px; align-items: center; }
-    .email-input { flex: 1; background: #0f172a; border: 1px solid #475569; color: #38bdf8; padding: 10px; border-radius: 8px; font-size: 0.9rem; font-weight: bold; }
-    
+    .email-input { flex: 1; background: #0f172a; border: 1px solid #475569; color: #38bdf8; padding: 10px; border-radius: 8px; font-size: 0.9rem; font-weight: bold; overflow: hidden; text-overflow: ellipsis; }
+
     .btn { background: #38bdf8; color: #0b0f19; border: none; padding: 10px 14px; border-radius: 8px; font-weight: bold; cursor: pointer; }
     .btn-secondary { background: #334155; color: #f8fafc; }
     .btn:active { opacity: 0.8; }
-    
+
     .actions { display: flex; gap: 8px; margin-top: 10px; }
     .status { font-size: 0.8rem; color: #10b981; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: blink 1.2s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
     .inbox-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .mail-item { background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #334155; cursor: pointer; }
-    .mail-from { font-size: 0.78rem; color: #38bdf8; }
-    .mail-subject { font-size: 0.88rem; font-weight: bold; margin: 2px 0; }
-    .empty { text-align: center; color: #64748b; font-size: 0.85rem; padding: 20px 0; }
+    .mail-item { background: #0f172a; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #334155; cursor: pointer; }
+    .mail-from { font-size: 0.8rem; color: #38bdf8; font-weight: bold; }
+    .mail-subject { font-size: 0.9rem; font-weight: bold; margin: 3px 0; color: #f8fafc; }
+    .mail-preview { font-size: 0.75rem; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .empty { text-align: center; color: #64748b; font-size: 0.85rem; padding: 24px 0; }
 
-    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; padding: 14px; }
-    .modal-box { background: #1e293b; width: 100%; max-width: 460px; max-height: 85vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #475569; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; padding: 14px; z-index: 100; }
+    .modal-box { background: #1e293b; width: 100%; max-width: 480px; max-height: 85vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #475569; }
     .modal-top { padding: 12px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
-    .modal-body { padding: 14px; overflow-y: auto; font-size: 0.9rem; line-height: 1.4; color: #e2e8f0; word-break: break-word; }
+    .modal-body { padding: 14px; overflow-y: auto; font-size: 0.9rem; line-height: 1.5; color: #e2e8f0; word-break: break-word; }
   </style>
 </head>
 <body>
@@ -49,16 +51,16 @@
   <div class="card">
     <div class="label">Disposable Email Address</div>
     <div class="email-box">
-      <input type="text" id="emailBox" class="email-input" readonly value="Generating address...">
+      <input type="text" id="emailBox" class="email-input" readonly value="Connecting...">
       <button class="btn" onclick="copyMail()">Copy</button>
     </div>
     <div class="actions">
-      <button class="btn btn-secondary" style="flex:1" onclick="fetchNewAddress()">🔄 New Email</button>
-      <button class="btn btn-secondary" style="flex:1" onclick="checkMessages()">📩 Refresh</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="initMailbox()">🔄 New Email</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="pollInbox()">📩 Refresh</button>
     </div>
     <div class="status">
       <span class="dot"></span>
-      <span id="statText">Auto checking every 6 seconds...</span>
+      <span id="statText">Checking incoming emails every 4s...</span>
     </div>
   </div>
 
@@ -85,88 +87,120 @@
 </div>
 
 <script>
-  let sidToken = '';
-  let activeEmail = '';
-  let pollInterval = null;
+  let sidToken = "";
+  let activeEmail = "";
+  let msgCache = [];
+  let pollTimer = null;
 
-  async function fetchNewAddress() {
-    const input = document.getElementById('emailBox');
-    input.value = "Generating address...";
+  // Ultra-reliable HTTPS proxy wrapper that completely eliminates CORS header blocks
+  async function safeFetch(url) {
+    const proxies = [
+      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
+    ];
+
+    for (let proxy of proxies) {
+      try {
+        const response = await fetch(proxy(url));
+        if (response.ok) {
+          return await response.json();
+        }
+      } catch (e) {
+        console.warn("Proxy attempt failed, trying next...", e);
+      }
+    }
+    throw new Error("All endpoints failed");
+  }
+
+  async function initMailbox() {
+    const box = document.getElementById("emailBox");
+    box.value = "Creating fresh inbox...";
+    document.getElementById("inboxList").innerHTML = '<div class="empty">Waiting for emails...</div>';
+    document.getElementById("msgCount").innerText = "0 messages";
+
     try {
-      const res = await fetch('https://api.guerrillamail.com/ajax.php?f=get_email_address');
-      const data = await res.json();
+      const targetUrl = "https://api.guerrillamail.com/ajax.php?f=get_email_address";
+      const data = await safeFetch(targetUrl);
+      
       sidToken = data.sid_token;
       activeEmail = data.email_addr;
-      input.value = activeEmail;
-      checkMessages();
-    } catch (e) {
-      input.value = "Network error. Tap New Email again.";
-      console.error(e);
+      box.value = activeEmail;
+      pollInbox();
+    } catch (err) {
+      console.error(err);
+      box.value = "Connection retry...";
+      setTimeout(initMailbox, 2000);
     }
   }
 
-  async function checkMessages() {
+  async function pollInbox() {
     if (!sidToken) return;
+
     try {
-      const res = await fetch(`https://api.guerrillamail.com/ajax.php?f=check_email&seq=0&sid_token=${sidToken}`);
-      const data = await res.json();
-      const list = data.list || [];
-      
-      const countEl = document.getElementById('msgCount');
-      const box = document.getElementById('inboxList');
-      countEl.innerText = `${list.length} message(s)`;
-
-      if (list.length === 0) {
-        box.innerHTML = '<div class="empty">Waiting for emails...</div>';
-        return;
-      }
-
-      box.innerHTML = list.map(item => `
-        <div class="mail-item" onclick="openMsg('${item.mail_id}')">
-          <div class="mail-from">${escapeStr(item.mail_from)}</div>
-          <div class="mail-subject">${escapeStr(item.mail_subject || '(No Subject)')}</div>
-          <div style="font-size:0.7rem; color:#64748b;">${item.mail_date}</div>
-        </div>
-      `).join('');
-    } catch (e) {
-      console.error(e);
+      const targetUrl = `https://api.guerrillamail.com/ajax.php?f=check_email&seq=0&sid_token=${sidToken}`;
+      const data = await safeFetch(targetUrl);
+      msgCache = data.list || [];
+      renderInbox();
+    } catch (err) {
+      console.error("Polling error:", err);
     }
   }
 
-  async function openMsg(id) {
-    try {
-      const res = await fetch(`https://api.guerrillamail.com/ajax.php?f=fetch_email&email_id=${id}&sid_token=${sidToken}`);
-      const data = await res.json();
+  function renderInbox() {
+    const listEl = document.getElementById("inboxList");
+    const countEl = document.getElementById("msgCount");
+    countEl.innerText = `${msgCache.length} message(s)`;
 
-      document.getElementById('mSub').innerText = data.mail_subject || '(No Subject)';
-      document.getElementById('mFrom').innerText = `From: ${data.mail_from} | ${data.mail_date}`;
-      document.getElementById('mHtml').innerHTML = data.mail_body;
-      document.getElementById('reader').style.display = 'flex';
-    } catch (e) {
-      alert("Error loading email body");
+    if (msgCache.length === 0) {
+      listEl.innerHTML = '<div class="empty">No emails received yet. Waiting...</div>';
+      return;
+    }
+
+    listEl.innerHTML = msgCache.map((item, index) => `
+      <div class="mail-item" onclick="openEmail(${index})">
+        <div class="mail-from">${escapeHtml(item.mail_from)}</div>
+        <div class="mail-subject">${escapeHtml(item.mail_subject || "(No Subject)")}</div>
+        <div class="mail-preview">${escapeHtml(item.mail_excerpt || "")}</div>
+      </div>
+    `).join("");
+  }
+
+  async function openEmail(index) {
+    const item = msgCache[index];
+    if (!item) return;
+
+    try {
+      const targetUrl = `https://api.guerrillamail.com/ajax.php?f=fetch_email&email_id=${item.mail_id}&sid_token=${sidToken}`;
+      const data = await safeFetch(targetUrl);
+
+      document.getElementById("mSub").innerText = data.mail_subject || "(No Subject)";
+      document.getElementById("mFrom").innerText = `From: ${data.mail_from} | ${data.mail_date}`;
+      document.getElementById("mHtml").innerHTML = data.mail_body;
+      document.getElementById("reader").style.display = "flex";
+    } catch (err) {
+      alert("Failed to load message content");
     }
   }
 
   function closeModal() {
-    document.getElementById('reader').style.display = 'none';
+    document.getElementById("reader").style.display = "none";
   }
 
   function copyMail() {
-    const val = document.getElementById('emailBox').value;
-    if (!val || val.includes('...')) return;
+    const val = document.getElementById("emailBox").value;
+    if (!val || val.includes("...")) return;
     navigator.clipboard.writeText(val);
-    alert('Email copied: ' + val);
+    alert("Copied to clipboard: " + val);
   }
 
-  function escapeStr(str) {
-    return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function escapeHtml(str) {
+    return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  fetchNewAddress();
-  if (pollInterval) clearInterval(pollInterval);
-  pollInterval = setInterval(checkMessages, 6000);
+  initMailbox();
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pollInbox, 4000);
 </script>
 
 </body>
-  </html>
-  
+</html>

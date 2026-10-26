@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fresh Temp Mail (Mail.tm)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: #0b0f19; color: #f1f5f9; padding: 14px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 460px; }
+    header { text-align: center; margin-bottom: 16px; }
+    header h1 { font-size: 1.3rem; color: #38bdf8; }
+    header p { font-size: 0.8rem; color: #94a3b8; }
+    
+    .card { background: #1e293b; padding: 14px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 12px; }
+    .label { font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; font-weight: bold; margin-bottom: 6px; }
+    
+    .email-box { display: flex; gap: 8px; align-items: center; }
+    .email-input { flex: 1; background: #0f172a; border: 1px solid #475569; color: #38bdf8; padding: 10px; border-radius: 8px; font-size: 0.9rem; font-weight: bold; }
+    
+    .btn { background: #38bdf8; color: #0b0f19; border: none; padding: 10px 14px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    .btn-secondary { background: #334155; color: #f8fafc; }
+    .btn:active { opacity: 0.8; }
+    
+    .actions { display: flex; gap: 8px; margin-top: 10px; }
+    .status { font-size: 0.8rem; color: #10b981; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; }
+
+    .inbox-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .mail-item { background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #334155; cursor: pointer; }
+    .mail-from { font-size: 0.78rem; color: #38bdf8; }
+    .mail-subject { font-size: 0.88rem; font-weight: bold; margin: 2px 0; }
+    .empty { text-align: center; color: #64748b; font-size: 0.85rem; padding: 20px 0; }
+
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; padding: 14px; }
+    .modal-box { background: #1e293b; width: 100%; max-width: 460px; max-height: 85vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #475569; }
+    .modal-top { padding: 12px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
+    .modal-body { padding: 14px; overflow-y: auto; font-size: 0.9rem; line-height: 1.4; color: #e2e8f0; word-break: break-word; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>⚡ Real Temp Mail Client</h1>
+    <p>Powered by Mail.tm API</p>
+  </header>
+
+  <div class="card">
+    <div class="label">Disposable Email Address</div>
+    <div class="email-box">
+      <input type="text" id="emailBox" class="email-input" readonly value="Generating address...">
+      <button class="btn" onclick="copyMail()">Copy</button>
+    </div>
+    <div class="actions">
+      <button class="btn btn-secondary" style="flex:1" onclick="createAccount()">🔄 New Email</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="loadMessages()">📩 Refresh</button>
+    </div>
+    <div class="status">
+      <span class="dot"></span>
+      <span id="statText">Active & checking every 5 seconds...</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="inbox-header">
+      <strong style="font-size: 0.95rem;">Inbox Messages</strong>
+      <span id="msgCount" style="font-size: 0.75rem; color: #94a3b8;">0 messages</span>
+    </div>
+    <div id="inboxList">
+      <div class="empty">Waiting for verification email...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Reader Modal -->
+<div id="reader" class="modal">
+  <div class="modal-box">
+    <div class="modal-top">
+      <b id="mSub" style="font-size: 0.9rem; max-width: 80%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Email</b>
+      <button class="btn btn-secondary" style="padding: 4px 10px;" onclick="closeModal()">✕</button>
+    </div>
+    <div style="padding: 8px 12px; background: #0f172a; font-size: 0.75rem; color: #94a3b8;" id="mFrom"></div>
+    <div class="modal-body" id="mHtml"></div>
+  </div>
+</div>
+
+<script>
+  let token = '';
+  let activeEmail = '';
+  let pollTimer = null;
+
+  async function createAccount() {
+    const input = document.getElementById('emailBox');
+    input.value = "Creating new inbox...";
+    document.getElementById('inboxList').innerHTML = '<div class="empty">Waiting for verification email...</div>';
+    document.getElementById('msgCount').innerText = '0 messages';
+
+    try {
+      // 1. Get available domains
+      const dRes = await fetch('https://api.mail.tm/domains');
+      const dData = await dRes.json();
+      const domain = dData['hydra:member'][0].domain;
+
+      // 2. Generate random credentials
+      const username = 'user_' + Math.random().toString(36).substring(2, 10);
+      const address = `${username}@${domain}`;
+      const password = 'Pass_' + Math.random().toString(36).substring(2, 10);
+
+      // 3. Register Account
+      const regRes = await fetch('https://api.mail.tm/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, password })
+      });
+
+      if (!regRes.ok) throw new Error("Registration failed");
+
+      // 4. Get Auth Token
+      const tokenRes = await fetch('https://api.mail.tm/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, password })
+      });
+      const tokenData = await tokenRes.json();
+      token = tokenData.token;
+      activeEmail = address;
+
+      input.value = activeEmail;
+      loadMessages();
+    } catch (e) {
+      input.value = "Error generating mail";
+      console.error(e);
+    }
+  }
+
+  async function loadMessages() {
+    if (!token) return;
+    try {
+      const res = await fetch('https://api.mail.tm/messages', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const list = data['hydra:member'] || [];
+      
+      const countEl = document.getElementById('msgCount');
+      const box = document.getElementById('inboxList');
+      countEl.innerText = `${list.length} message(s)`;
+
+      if (list.length === 0) {
+        box.innerHTML = '<div class="empty">No emails yet. Waiting for Hugging Face mail...</div>';
+        return;
+      }
+
+      box.innerHTML = list.map(m => `
+        <div class="mail-item" onclick="viewMessage('${m.id}')">
+          <div class="mail-from">${escapeStr(m.from.address)}</div>
+          <div class="mail-subject">${escapeStr(m.subject || '(No Subject)')}</div>
+        </div>
+      `).join('');
+    } catch (e) {
+      console.error("Fetch messages failed", e);
+    }
+  }
+
+  async function viewMessage(id) {
+    try {
+      const res = await fetch(`https://api.mail.tm/messages/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const msg = await res.json();
+
+      document.getElementById('mSub').innerText = msg.subject || 'Message';
+      document.getElementById('mFrom').innerText = `From: ${msg.from.address}`;
+      
+      // Render HTML if present, else plain text
+      const content = msg.html ? msg.html.join('') : `<pre style="white-space: pre-wrap;">${escapeStr(msg.text)}</pre>`;
+      document.getElementById('mHtml').innerHTML = content;
+      document.getElementById('reader').style.display = 'flex';
+    } catch (e) {
+      alert("Failed to open email.");
+    }
+  }
+
+  function closeModal() {
+    document.getElementById('reader').style.display = 'none';
+  }
+
+  function copyMail() {
+    const val = document.getElementById('emailBox').value;
+    if (!val || val.includes('...')) return;
+    navigator.clipboard.writeText(val);
+    alert('Email copied: ' + val);
+  }
+
+  function escapeStr(str) {
+    return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // Init
+  createAccount();
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(loadMessages, 5000); // Polls every 5s
+</script>
+
+</body>
+  </html>
+                                                            

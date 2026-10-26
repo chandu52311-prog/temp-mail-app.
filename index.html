@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fresh Temp Mail (Mail.tm)</title>
+  <title>Temp Mail Client</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background: #0b0f19; color: #f1f5f9; padding: 14px; display: flex; justify-content: center; }
@@ -43,7 +43,7 @@
 <div class="container">
   <header>
     <h1>⚡ Real Temp Mail Client</h1>
-    <p>Powered by Mail.tm API</p>
+    <p>Live Inbound Mail Service</p>
   </header>
 
   <div class="card">
@@ -53,12 +53,12 @@
       <button class="btn" onclick="copyMail()">Copy</button>
     </div>
     <div class="actions">
-      <button class="btn btn-secondary" style="flex:1" onclick="createAccount()">🔄 New Email</button>
-      <button class="btn btn-secondary" style="flex:1" onclick="loadMessages()">📩 Refresh</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="fetchNewAddress()">🔄 New Email</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="checkMessages()">📩 Refresh</button>
     </div>
     <div class="status">
       <span class="dot"></span>
-      <span id="statText">Active & checking every 5 seconds...</span>
+      <span id="statText">Auto checking every 6 seconds...</span>
     </div>
   </div>
 
@@ -68,12 +68,11 @@
       <span id="msgCount" style="font-size: 0.75rem; color: #94a3b8;">0 messages</span>
     </div>
     <div id="inboxList">
-      <div class="empty">Waiting for verification email...</div>
+      <div class="empty">Waiting for emails...</div>
     </div>
   </div>
 </div>
 
-<!-- Reader Modal -->
 <div id="reader" class="modal">
   <div class="modal-box">
     <div class="modal-top">
@@ -86,99 +85,65 @@
 </div>
 
 <script>
-  let token = '';
+  let sidToken = '';
   let activeEmail = '';
-  let pollTimer = null;
+  let pollInterval = null;
 
-  async function createAccount() {
+  async function fetchNewAddress() {
     const input = document.getElementById('emailBox');
-    input.value = "Creating new inbox...";
-    document.getElementById('inboxList').innerHTML = '<div class="empty">Waiting for verification email...</div>';
-    document.getElementById('msgCount').innerText = '0 messages';
-
+    input.value = "Generating address...";
     try {
-      // 1. Get available domains
-      const dRes = await fetch('https://api.mail.tm/domains');
-      const dData = await dRes.json();
-      const domain = dData['hydra:member'][0].domain;
-
-      // 2. Generate random credentials
-      const username = 'user_' + Math.random().toString(36).substring(2, 10);
-      const address = `${username}@${domain}`;
-      const password = 'Pass_' + Math.random().toString(36).substring(2, 10);
-
-      // 3. Register Account
-      const regRes = await fetch('https://api.mail.tm/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, password })
-      });
-
-      if (!regRes.ok) throw new Error("Registration failed");
-
-      // 4. Get Auth Token
-      const tokenRes = await fetch('https://api.mail.tm/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, password })
-      });
-      const tokenData = await tokenRes.json();
-      token = tokenData.token;
-      activeEmail = address;
-
+      const res = await fetch('https://api.guerrillamail.com/ajax.php?f=get_email_address');
+      const data = await res.json();
+      sidToken = data.sid_token;
+      activeEmail = data.email_addr;
       input.value = activeEmail;
-      loadMessages();
+      checkMessages();
     } catch (e) {
-      input.value = "Error generating mail";
+      input.value = "Network error. Tap New Email again.";
       console.error(e);
     }
   }
 
-  async function loadMessages() {
-    if (!token) return;
+  async function checkMessages() {
+    if (!sidToken) return;
     try {
-      const res = await fetch('https://api.mail.tm/messages', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await fetch(`https://api.guerrillamail.com/ajax.php?f=check_email&seq=0&sid_token=${sidToken}`);
       const data = await res.json();
-      const list = data['hydra:member'] || [];
+      const list = data.list || [];
       
       const countEl = document.getElementById('msgCount');
       const box = document.getElementById('inboxList');
       countEl.innerText = `${list.length} message(s)`;
 
       if (list.length === 0) {
-        box.innerHTML = '<div class="empty">No emails yet. Waiting for Hugging Face mail...</div>';
+        box.innerHTML = '<div class="empty">Waiting for emails...</div>';
         return;
       }
 
-      box.innerHTML = list.map(m => `
-        <div class="mail-item" onclick="viewMessage('${m.id}')">
-          <div class="mail-from">${escapeStr(m.from.address)}</div>
-          <div class="mail-subject">${escapeStr(m.subject || '(No Subject)')}</div>
+      box.innerHTML = list.map(item => `
+        <div class="mail-item" onclick="openMsg('${item.mail_id}')">
+          <div class="mail-from">${escapeStr(item.mail_from)}</div>
+          <div class="mail-subject">${escapeStr(item.mail_subject || '(No Subject)')}</div>
+          <div style="font-size:0.7rem; color:#64748b;">${item.mail_date}</div>
         </div>
       `).join('');
     } catch (e) {
-      console.error("Fetch messages failed", e);
+      console.error(e);
     }
   }
 
-  async function viewMessage(id) {
+  async function openMsg(id) {
     try {
-      const res = await fetch(`https://api.mail.tm/messages/${id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const msg = await res.json();
+      const res = await fetch(`https://api.guerrillamail.com/ajax.php?f=fetch_email&email_id=${id}&sid_token=${sidToken}`);
+      const data = await res.json();
 
-      document.getElementById('mSub').innerText = msg.subject || 'Message';
-      document.getElementById('mFrom').innerText = `From: ${msg.from.address}`;
-      
-      // Render HTML if present, else plain text
-      const content = msg.html ? msg.html.join('') : `<pre style="white-space: pre-wrap;">${escapeStr(msg.text)}</pre>`;
-      document.getElementById('mHtml').innerHTML = content;
+      document.getElementById('mSub').innerText = data.mail_subject || '(No Subject)';
+      document.getElementById('mFrom').innerText = `From: ${data.mail_from} | ${data.mail_date}`;
+      document.getElementById('mHtml').innerHTML = data.mail_body;
       document.getElementById('reader').style.display = 'flex';
     } catch (e) {
-      alert("Failed to open email.");
+      alert("Error loading email body");
     }
   }
 
@@ -197,12 +162,11 @@
     return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  // Init
-  createAccount();
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(loadMessages, 5000); // Polls every 5s
+  fetchNewAddress();
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(checkMessages, 6000);
 </script>
 
 </body>
   </html>
-                                                            
+  
